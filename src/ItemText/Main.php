@@ -1,64 +1,100 @@
 <?php
 /*
-  ____        ____            _    _                     
- |  _ \  __ _|  _ \ ___  __ _| |  / \   __ _ _   _  __ _ 
- | | | |/ _` | |_) / _ \/ _` | | / _ \ / _` | | | |/ _` |
- | |_| | (_| |  _ <  __/ (_| | |/ ___ \ (_| | |_| | (_| |
- |____/ \__,_|_| \_\___|\__,_|_/_/   \_\__, |\__,_|\__,_|
-                                          |_|            
+   _____  .__                .___  __          ____  ________
+  /  _  \ |  |   ____ ___  __|   |/  |________/_   |/  _____/
+ /  /_\  \|  | _/ __ \\  \/  /   \   __\___   /|   /   __  \ 
+/    |    \  |_\  ___/ >    <|   ||  |  /    / |   \  |__\  \
+\____|__  /____/\___  >__/\_ \___||__| /_____ \|___|\_____  /
+        \/          \/      \/               \/           \/ 
 */
 
 namespace ItemText;
 
-//Plugin
-use pocketmine\plugin\PluginBase;
 use pocketmine\plugin\Plugin;
-
-//Utils
-use pocketmine\utils\TextFormat;
-
-//Event
+use pocketmine\utils\TextFormat as Color;
+use pocketmine\utils\Config;
+use pocketmine\plugin\PluginBase;
 use pocketmine\event\Listener;
-use pocketmine\event\entity\ItemSpawnEvent;
-
-//Server
 use pocketmine\Server;
-
-//Item
+use pocketmine\command\CommandSender;
 use pocketmine\item\Item;
-
-//Entity
+use pocketmine\event\entity\ItemSpawnEvent;
 use pocketmine\entity\Entity;
+
+
 
 
 class Main extends PluginBase implements Listener
 {
+	
+	private $langTexts = [];
+	private $cfg;
+
 
     public function onEnable() {
-	$this->getServer()->getPluginManager()->registerEvents($this, $this);
-        $this->getLogger()->notice(TextFormat::LIGHT_PURPLE."ItemDisplayText Enabled");
-        //Config soon!!!!!
-    }
+		$this->getServer()->getPluginManager()->registerEvents($this, $this);
+		
+		$pathLang = $this->getDataFolder() . "lang";
+        //Save default lang files on first load
+		@mkdir($pathLang);
+        foreach ($this->getResources() as $resource) {
+            $this->saveResource("lang" . DIRECTORY_SEPARATOR . $resource->getFilename());
+		}
+		
+		$this->saveResource("config.yml");
+		$this->cfg = new Config($this->getDataFolder() . "config.yml", Config::YAML);
+		$this->cfg = $this->cfg->getAll();
+		
+		//Load Translation file
+		$this->loadLang();
+		
+	}
     
-    public function onDisable() {
-        $this->getLogger()->notice(TextFormat::LIGHT_PURPLE."ItemDisplayText Disabled!");
-    }
-
-    //Don't edit anything unless you know what you're doing
-    public function onThrow(ItemSpawnEvent $event){
-        #Soon perWorld config!!!
-        #$player = $event->getPlayer();
-        #$name = $player->getName();
-       
-        $entity = $event->getEntity();
+    public function onItemSpawn(ItemSpawnEvent $e){
+        $entity = $e->getEntity();
         $item = $entity->getItem();
-        $itemname = $item->getName();
-        $entity->setNameTag(TextFormat::LIGHT_PURPLE.$itemname);
+        $name = $item->getName();
+		
+		$reversedName = array_search($name, $this->langTexts["en_US"]);
+		if ($reversedName) {
+			$entity->setNameTag($this->langTexts[$this->cfg["language"]][$reversedName]);
+		}
+		else	$entity->setNameTag($name);
+
         $entity->setNameTagVisible(true);
         $entity->setNameTagAlwaysVisible(true);
-        //Message onThrow Soon
-        #$player->sendMessage(TextFormat::GRAY."You threw "TextFormat::LIGHT_PURPLE. $itemname);
     }
+	
+	public function loadLang(){
+		foreach ($this->getResources() as $resource) {
+			$filename = $resource->getFilename();
+			//check if it's an language file with correct name
+			if(pathinfo($filename, PATHINFO_EXTENSION) == "lang" && preg_match('/[A-z]{2}_[A-z]{2}/', basename($filename, ".lang"))) {
+				$localName = basename($filename, ".lang");
+				$this->langTexts[$localName] = [];
+				$texts = explode("\n", str_replace(["\r", "\\/\\/"], ["", "//"], file_get_contents($this->getDataFolder() . "lang" . DIRECTORY_SEPARATOR . $filename)));
+				foreach($texts as $line){
+					$line = trim($line);
+					if($line === ""){
+						continue;
+					}
+					$line = explode("=", $line);
+					$this->langTexts[$localName][trim(array_shift($line))] = trim(str_replace(["\\n", "\\N",], "\n", implode("=", $line)));
+				}
+			}
+		}
+	}
+	
+	public function array_find($needle, array $haystack)
+	{
+		foreach ($haystack as $key => $value) {
+			if (false !== stripos($value, $needle)) {
+				return $key;
+			}
+		}
+		return false;
+	}
 
-    
+	
+
 }
